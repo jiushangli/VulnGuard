@@ -98,8 +98,20 @@ class LLMProviderConfig:
     """Configuration for a single LLM provider."""
     name: str = ""
     model: str = ""
-    api_base: str = ""
+    api_base: str = ""         # Alias: also accessible as base_url
     api_key: str = ""
+    temperature: float = 0.3
+    max_tokens: int = 4096
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def base_url(self) -> str:
+        """Alias for api_base, for convenience."""
+        return self.api_base
+
+    @base_url.setter
+    def base_url(self, value: str) -> None:
+        self.api_base = value
 
 
 @dataclass

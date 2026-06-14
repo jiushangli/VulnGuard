@@ -5,6 +5,8 @@ Public interfaces:
 - LLMGateway, LLMProvider, AgentRole, CompletionResult, StreamingChunk
 - PromptManager, PromptLayer
 - estimate_tokens (fallback token counter)
+- Provider implementations: OpenAIProvider, AnthropicProvider, OllamaProvider
+- create_provider_from_config (factory function)
 """
 
 from .llm import (
@@ -21,6 +23,13 @@ from .prompt import (
     PromptManager,
 )
 
+from .providers import (
+    AnthropicProvider,
+    OllamaProvider,
+    OpenAIProvider,
+    create_provider_from_config,
+)
+
 __all__ = [
     # LLM
     "AgentRole",
@@ -32,4 +41,9 @@ __all__ = [
     # Prompt
     "PromptLayer",
     "PromptManager",
+    # Providers
+    "OpenAIProvider",
+    "AnthropicProvider",
+    "OllamaProvider",
+    "create_provider_from_config",
 ]

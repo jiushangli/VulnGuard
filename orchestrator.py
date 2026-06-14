@@ -390,18 +390,31 @@ class Orchestrator:
         """
         Create an LLM provider instance from configuration.
 
-        Currently returns None as concrete providers (OpenAI, Anthropic, etc.)
-        are expected to be plugged in by the user or a separate provider package.
-        The orchestrator sets up the routing structure; actual provider
-        implementations need to be registered externally.
+        Delegates to the create_provider_from_config factory, which supports
+        OpenAI, Anthropic, and Ollama backends. Returns None if the required
+        SDK is not installed or the provider type cannot be determined.
         """
-        # Provider creation is a hook point for integration.
-        # The LLMGateway supports dynamic registration, so providers
-        # can be added after initialization.
+        from .utils.providers import create_provider_from_config
+
         self._logger.debug(
             f"  Provider config: name={config.name}, model={config.model}"
         )
-        return None
+        try:
+            provider = create_provider_from_config(config)
+            if provider is not None:
+                self._logger.info(
+                    f"  Created provider '{provider.name}' from config '{config.name}'"
+                )
+            else:
+                self._logger.warning(
+                    f"  Could not determine provider type for config '{config.name}'"
+                )
+            return provider
+        except ImportError as e:
+            self._logger.warning(
+                f"  Skipping provider '{config.name}': {e}"
+            )
+            return None
 
     def _load_rules_as_hints(self) -> None:
         """Load vulnerability rule libraries as Hints into VulnKB."""
