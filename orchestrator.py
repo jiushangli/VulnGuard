@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from vulnkb.models import (
+from .vulnkb.models import (
     AuditPhase,
     Fact,
     FactType,
@@ -42,18 +42,18 @@ from vulnkb.models import (
     make_hint,
 )
 
-from agent_base import AgentBase, AgentConfig, AgentType
-from miner.agent import MinerAgent
-from observer.agent import ObserverAgent
-from verifier.agent import VerifierAgent
+from .agent_base import AgentBase, AgentConfig, AgentType
+from .miner.agent import MinerAgent
+from .observer.agent import ObserverAgent
+from .verifier.agent import VerifierAgent
 
-from intelligence.engine import CodeIntelligenceEngine, IntelligenceConfig
+from .intelligence.engine import CodeIntelligenceEngine, IntelligenceConfig
 
-from tools.registry import AuditToolRegistry
+from .tools.registry import AuditToolRegistry
 
-from utils.llm import LLMGateway, LLMProvider, AgentRole
+from .utils.llm import LLMGateway, LLMProvider, AgentRole
 
-from config.settings import VulnGuardConfig
+from .config.settings import VulnGuardConfig
 
 logger = logging.getLogger(__name__)
 
@@ -527,8 +527,8 @@ class Orchestrator:
                 confidence=self._severity_to_confidence(intel_fact.severity.value),
                 metadata=intel_fact.metadata,
             )
-            result = self.kb.add_fact(vulnkb_fact, verify=False)
-            if result.admitted:
+            admission = self.kb.add_fact(vulnkb_fact, verify=False)
+            if admission.admitted:
                 facts_added += 1
 
         # Convert intelligence intents to VulnKB Intents and inject

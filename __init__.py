@@ -14,4 +14,6 @@ Core design:
 __version__ = "0.1.0"
 
 from .agent_base import AgentBase, AgentType, AgentConfig, OODAResult
+from .vulnkb.models import VulnKB
+from .intelligence.engine import CodeIntelligenceEngine
 from .utils import LLMGateway, LLMProvider, AgentRole, PromptManager, PromptLayer

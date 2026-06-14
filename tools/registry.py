@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from vulnkb.models import RiskLevel, AuditPhase, FactType
+from ..vulnkb.models import RiskLevel, AuditPhase, FactType
 
 from .descriptor import (
     AuditTool,

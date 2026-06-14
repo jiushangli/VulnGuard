@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
-from vulnkb.models import (
+from ..vulnkb.models import (
     AuditPhase,
     Fact,
     FactType,
@@ -40,10 +40,10 @@ from vulnkb.models import (
     make_intent,
 )
 
-from agent_base import AgentBase, AgentConfig, AgentType, OODAResult
-from tools.descriptor import AuditTool
-from utils.llm import AgentRole, LLMGateway, LLMProvider
-from utils.prompt import PromptLayer, PromptManager
+from ..agent_base import AgentBase, AgentConfig, AgentType, OODAResult
+from ..tools.descriptor import AuditTool
+from ..utils.llm import AgentRole, LLMGateway, LLMProvider
+from ..utils.prompt import PromptLayer, PromptManager
 
 logger = logging.getLogger(__name__)
 

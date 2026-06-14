@@ -39,7 +39,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional, Union
 
-from vulnkb.models import (
+from .vulnkb.models import (
     AuditPhase,
     Fact,
     FactType,
@@ -52,10 +52,10 @@ from vulnkb.models import (
     make_intent,
 )
 
-from tools.descriptor import AuditTool
+from .tools.descriptor import AuditTool
 
-from utils.llm import AgentRole, CompletionResult, LLMGateway
-from utils.prompt import PromptLayer, PromptManager
+from .utils.llm import AgentRole, CompletionResult, LLMGateway
+from .utils.prompt import PromptLayer, PromptManager
 
 logger = logging.getLogger(__name__)
 

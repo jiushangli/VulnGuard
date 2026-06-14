@@ -16,7 +16,7 @@ import logging
 import sys
 from pathlib import Path
 
-from config.settings import VulnGuardConfig, default_config
+from .config.settings import VulnGuardConfig, default_config
 
 
 def setup_logging(level: str = "INFO") -> None:
@@ -53,7 +53,7 @@ def load_config(config_path: str | None, target_path: str | None, language: str 
 
 async def run_audit(config: VulnGuardConfig, phase: str | None = None) -> int:
     """Run a full or partial audit using the Orchestrator."""
-    from orchestrator import Orchestrator
+    from .orchestrator import Orchestrator
 
     orchestrator = Orchestrator(config=config)
     report = await orchestrator.run(phase=phase)
@@ -125,7 +125,7 @@ async def run_audit(config: VulnGuardConfig, phase: str | None = None) -> int:
 
 def run_report(db_path: str, target: str = "", language: str = "") -> int:
     """Generate a report from an existing VulnKB database."""
-    from orchestrator import generate_report_from_db
+    from .orchestrator import generate_report_from_db
 
     report = generate_report_from_db(
         db_path=db_path,

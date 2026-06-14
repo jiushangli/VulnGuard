@@ -29,11 +29,13 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
-from vulnkb.models import (
+from ..vulnkb.models import (
     AuditPhase,
     Fact,
     FactType,
     FailureBoundary,
+    Hint,
+    HintSource,
     Intent,
     IntentStatus,
     MinerSpec,
@@ -42,10 +44,10 @@ from vulnkb.models import (
     make_intent,
 )
 
-from agent_base import AgentBase, AgentConfig, AgentType, OODAResult
-from tools.descriptor import AuditTool
-from utils.llm import AgentRole, LLMGateway
-from utils.prompt import PromptLayer, PromptManager
+from ..agent_base import AgentBase, AgentConfig, AgentType, OODAResult
+from ..tools.descriptor import AuditTool
+from ..utils.llm import AgentRole, LLMGateway
+from ..utils.prompt import PromptLayer, PromptManager
 
 logger = logging.getLogger(__name__)
 
@@ -795,7 +797,7 @@ class ObserverAgent(AgentBase):
                 # Add reminder as a Hint to VulnKB
                 message = action_dict.get("message", "Course correction needed")
                 if self.kb is not None:
-                    from vulnkb.models import Hint, HintSource, make_hint
+                    from ..vulnkb.models import Hint, HintSource, make_hint
                     hint = make_hint(
                         pattern=f"Observer reminder: {direction}",
                         applicability=message,
