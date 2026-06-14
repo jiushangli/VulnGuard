@@ -424,51 +424,176 @@ class GinRouteExtractor(RouteExtractor):
 
 
 class FastAPIRouteExtractor(RouteExtractor):
+    """Extract FastAPI routes from CodeNodes.
+
+    Handles two decorator formats:
+    1. Source-level: @router.get("/path")  (from regex-based parsing)
+    2. AST repr-level: Attribute(value=Name(id='router'), attr='get', ctx=Load())
+       (from Python AST parsing, which stores decorators as ast node repr strings)
+
+    For AST repr, the route path must be extracted from the function source
+    since decorators don't contain the path string.
+    """
     language = "python"
 
-    _RE_ROUTE = re.compile(
+    # Matches source-level decorator: @router.get("/path")
+    _RE_ROUTE_SOURCE = re.compile(
         r"@(\w+)\.\s*(get|post|put|delete|patch)\s*\(\s*['\"]([^'\"]+)['\"]",
         re.IGNORECASE,
     )
 
+    # Matches AST repr decorator: Attribute(value=Name(id='router'), attr='get', ...)
+    # Captures: router variable name and HTTP method
+    _RE_ROUTE_AST = re.compile(
+        r"Attribute\(value=Name\(id='(\w+)',\s*ctx=Load\(\)\),\s*attr='(\w+)',\s*ctx=Load\(\)\)",
+    )
+
+    # Matches path from source-level decorator in function source text
+    _RE_PATH_FROM_SOURCE = re.compile(
+        r"@\w+\.\s*(?:get|post|put|delete|patch)\s*\(\s*['\"]([^'\"]+)['\"]",
+        re.IGNORECASE,
+    )
+
+    # Matches router prefix: router = APIRouter(prefix="/vulnerable", ...)
+    _RE_ROUTER_PREFIX = re.compile(
+        r"""(?:router|app)\s*=\s*APIRouter\s*\([^)]*prefix\s*=\s*['"]([^'"]+)['"]""",
+    )
+
     def extract(self, nodes: List[CodeNode]) -> List[APIEndpoint]:
         endpoints: List[APIEndpoint] = []
+
+        # First pass: collect router prefixes from all nodes
+        router_prefixes: Dict[str, str] = {}
+        for node in nodes:
+            for m in self._RE_ROUTER_PREFIX.finditer(node.source):
+                router_prefixes[m.group(1)] = m.group(2)
+
+        # Second pass: extract routes
         for node in nodes:
             if node.language != "python":
                 continue
-            for m in self._RE_ROUTE.finditer(node.source):
-                router_var = m.group(1)
-                method = m.group(2).upper()
-                path = m.group(3)
-                auth_required, auth_mw = self._check_auth(node)
-                ep = APIEndpoint(
-                    endpoint_id=self._make_ep_id(method, path),
-                    method=HTTPMethod(method),
-                    path=path,
-                    handler=node.name,
-                    file_path=node.file_path,
-                    middleware_chain=list(node.decorators),
-                    auth_required=auth_required,
-                    auth_middleware=auth_mw,
-                    params=self._extract_params(path, node),
-                    source_node=node,
-                )
-                endpoints.append(ep)
+            if node.type not in (CodeNodeType.FUNCTION, CodeNodeType.METHOD):
+                continue
+
+            for dec in node.decorators:
+                # Try AST repr format first
+                ast_match = self._RE_ROUTE_AST.match(dec)
+                if ast_match:
+                    router_var = ast_match.group(1)
+                    http_method = ast_match.group(2).upper()
+                    if http_method not in ("GET", "POST", "PUT", "DELETE", "PATCH"):
+                        continue
+                    # Extract path from function source (decorator line)
+                    path = self._extract_path_from_source(node) or "/"
+                    prefix = router_prefixes.get(router_var, "")
+                    full_path = prefix + path if path != "/" else (prefix or "/")
+                    auth_required, auth_mw = self._check_auth(node)
+                    ep = APIEndpoint(
+                        endpoint_id=self._make_ep_id(http_method, full_path),
+                        method=HTTPMethod(http_method),
+                        path=full_path,
+                        handler=node.name,
+                        file_path=node.file_path,
+                        middleware_chain=list(node.decorators),
+                        auth_required=auth_required,
+                        auth_middleware=auth_mw,
+                        params=self._extract_params(full_path, node),
+                        source_node=node,
+                    )
+                    endpoints.append(ep)
+                    continue
+
+                # Try source-level format
+                for m in self._RE_ROUTE_SOURCE.finditer(dec):
+                    router_var = m.group(1)
+                    method = m.group(2).upper()
+                    path = m.group(3)
+                    prefix = router_prefixes.get(router_var, "")
+                    full_path = prefix + path if path != "/" else (prefix or "/")
+                    auth_required, auth_mw = self._check_auth(node)
+                    ep = APIEndpoint(
+                        endpoint_id=self._make_ep_id(method, full_path),
+                        method=HTTPMethod(method),
+                        path=full_path,
+                        handler=node.name,
+                        file_path=node.file_path,
+                        middleware_chain=list(node.decorators),
+                        auth_required=auth_required,
+                        auth_middleware=auth_mw,
+                        params=self._extract_params(full_path, node),
+                        source_node=node,
+                    )
+                    endpoints.append(ep)
+
         return endpoints
+
+    @staticmethod
+    def _extract_path_from_source(node: CodeNode) -> Optional[str]:
+        """Extract the route path from the function's source text.
+
+        Searches for decorator patterns like @router.get("/path") in
+        the raw source of the function.
+        """
+        # Look at lines before the function definition for the route decorator
+        lines = node.source.split("\n")
+        for line in lines:
+            m = re.search(
+                r"""@\w+\.\s*(?:get|post|put|delete|patch)\s*\(\s*['"]([^'"]+)['"]""",
+                line, re.IGNORECASE,
+            )
+            if m:
+                return m.group(1)
+            # Handle multi-line decorators: @router.get(
+            #     "/path",
+            m2 = re.search(r"""['"](/[^'"]+)['"]""", line)
+            if m2 and line.strip().startswith("'") or line.strip().startswith('"'):
+                # Only match paths that start with /
+                candidate = m2.group(1) if m2 else None
+                if candidate and candidate.startswith("/"):
+                    return candidate
+        return None
 
     @staticmethod
     def _check_auth(node: CodeNode) -> Tuple[bool, List[str]]:
         auth_mw: List[str] = []
+        # Check decorators for auth patterns
         for dec in node.decorators:
             d = dec.lower()
             if any(k in d for k in ("depends", "auth", "jwt", "token", "security")):
                 auth_mw.append(dec)
+        # Also check function source for auth-related patterns
+        source_lower = node.source.lower()
+        if any(kw in source_lower for kw in (
+            "require_auth", "_require_auth", "current_user", "jwt.decode",
+            "verify_token", "check_auth", "authorization",
+        )):
+            # But only if it's in the function body, not just in a comment
+            func_match = re.search(r"def\s+\w+\s*\([^)]*\)\s*:", node.source)
+            if func_match:
+                body = node.source[func_match.end():]
+                if any(kw in body.lower() for kw in (
+                    "require_auth", "jwt.decode", "verify_token", "authorization",
+                )):
+                    auth_mw.append("auth_check_in_body")
         return len(auth_mw) > 0, auth_mw
 
     @staticmethod
     def _extract_params(path: str, node: CodeNode) -> List[str]:
         params: List[str] = []
+        # FastAPI path params: {note_id}
         params.extend(re.findall(r"\{(\w+)\}", path))
+        # Function params from source (for query params and request body)
+        func_match = re.search(r"def\s+\w+\s*\(([^)]*)\)", node.source)
+        if func_match:
+            param_str = func_match.group(1)
+            for p in param_str.split(","):
+                p = p.strip()
+                if not p:
+                    continue
+                # Handle type-annotated params: note_id: int, request: Request
+                param_name = p.split(":")[0].strip().split("=")[0].strip()
+                if param_name and param_name not in ("self", "cls"):
+                    params.append(param_name)
         return params
 
 

@@ -179,7 +179,13 @@ class PythonParser(LanguageParser):
 
     def _parse_function(self, func, source: str, path: str,
                         file_imports: List[str]) -> CodeNode:
+        # Include decorator lines in source range for FastAPI route extraction
         start = func.lineno
+        # Find the first decorator line if any
+        if func.decorator_list:
+            first_dec_line = min(d.lineno for d in func.decorator_list
+                                 if hasattr(d, 'lineno') and d.lineno)
+            start = min(start, first_dec_line)
         end = getattr(func, "end_lineno", start) or start
         source_text = "\n".join(source.splitlines()[start - 1:end])
         decorators = [self._decorator_text(d, source) for d in func.decorator_list]
@@ -201,14 +207,46 @@ class PythonParser(LanguageParser):
 
     @staticmethod
     def _decorator_text(dec, source: str) -> str:
+        """Convert an AST decorator node back to its source text.
+
+        Tries to extract the original source line first for readability.
+        Falls back to ast.dump() for complex expressions.
+        """
+        # Try to extract from source using line numbers
+        if hasattr(dec, 'lineno') and dec.lineno:
+            source_lines = source.splitlines()
+            idx = dec.lineno - 1
+            if 0 <= idx < len(source_lines):
+                line = source_lines[idx].strip()
+                # Only return as source text if it looks like a decorator
+                if line.startswith('@'):
+                    return line
+        # Fallback: reconstruct from AST
         if isinstance(dec, ast.Name):
-            return dec.id
+            return f"@{dec.id}"
         if isinstance(dec, ast.Attribute):
             return ast.dump(dec)
         if isinstance(dec, ast.Call):
             if isinstance(dec.func, ast.Name):
                 return dec.func.id
             if isinstance(dec.func, ast.Attribute):
+                # Try to get source line for calls like @router.get("/path")
+                if hasattr(dec, 'lineno') and dec.lineno:
+                    source_lines = source.splitlines()
+                    idx = dec.lineno - 1
+                    if 0 <= idx < len(source_lines):
+                        line = source_lines[idx].strip()
+                        if line.startswith('@'):
+                            # May span multiple lines - collect until closing paren
+                            collected = []
+                            paren_depth = 0
+                            for j in range(idx, min(idx + 10, len(source_lines))):
+                                collected.append(source_lines[j])
+                                paren_depth += source_lines[j].count('(') - source_lines[j].count(')')
+                                if paren_depth <= 0 and j > idx:
+                                    break
+                            result = ' '.join(l.strip() for l in collected)
+                            return result
                 return ast.dump(dec.func)
         return ast.dump(dec)
 
